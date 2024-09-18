@@ -1,0 +1,2 @@
+uint16 motor_id
+int32 motor_pos

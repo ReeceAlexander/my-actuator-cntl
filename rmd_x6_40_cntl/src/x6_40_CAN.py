@@ -6,6 +6,12 @@ import os
 import time
 import math
 
+from rmd_x6_40_cntl.msg import Buttons
+from rmd_x6_40_cntl.msg import MotorSpeed
+
+pub = rospy.Publisher('gui_input', Buttons, queue_size=1)
+pub_two = rospy.Publisher('motor_speed', MotorSpeed, queue_size=1)
+
 os.system("sudo ip link set can0 down")
 time.sleep(0.1)
 os.system("sudo ip link set can0 up type can bitrate 1000000")
@@ -148,13 +154,15 @@ def send_activate_command(id):
     os.system(f"cansend can0 {can_id_hex}#0100000000000000")
     print(f"Activating motor {can_id_hex}")
 
-speed_limit = 40
+speed_limit = 90
 prev_linear_x = 0.0
 prev_angular_z = 0.0
+speed = MotorSpeed()
 
-def callback(data):
+def cmd_vel_callback(data):
     global prev_linear_x
     global prev_angular_z
+    global speed
     
     linear_x = data.linear.x
     angular_z = data.angular.z 
@@ -162,31 +170,40 @@ def callback(data):
     if linear_x != prev_linear_x:
 
         if linear_x != 0.0:
+
             linear_speed = linear_x * speed_limit
             send_speed_command(BACK_LEFT_MOTOR_ID, int(linear_speed))
-            get_position(BACK_LEFT_MOTOR_ID)
-
             send_speed_command(FRONT_RIGHT_MOTOR_ID, int(linear_speed))
-            get_position(FRONT_RIGHT_MOTOR_ID)
-
             send_speed_command(BACK_RIGHT_MOTOR_ID, int(linear_speed))
-            get_position(BACK_RIGHT_MOTOR_ID)
-
             send_speed_command(FRONT_LEFT_MOTOR_ID, int(linear_speed))
+            
+            get_position(BACK_LEFT_MOTOR_ID)
+            get_position(FRONT_RIGHT_MOTOR_ID)
+            get_position(BACK_RIGHT_MOTOR_ID)
             get_position(FRONT_LEFT_MOTOR_ID)
+            
+            speed.back_left_speed = int(linear_speed)
+            speed.front_right_speed = int(linear_speed)
+            speed.back_right_speed = int(linear_speed)
+            speed.front_left_speed = int(linear_speed)
 
         else:
             send_stop_command(BACK_LEFT_MOTOR_ID)
-            get_position(BACK_LEFT_MOTOR_ID)
-
             send_stop_command(FRONT_RIGHT_MOTOR_ID)
-            get_position(FRONT_RIGHT_MOTOR_ID)
-
             send_stop_command(BACK_RIGHT_MOTOR_ID)
-            get_position(BACK_RIGHT_MOTOR_ID)
-
             send_stop_command(FRONT_LEFT_MOTOR_ID)
+            
+            get_position(BACK_LEFT_MOTOR_ID)
+            get_position(FRONT_RIGHT_MOTOR_ID)
+            get_position(BACK_RIGHT_MOTOR_ID)
             get_position(FRONT_LEFT_MOTOR_ID)
+            
+            speed.back_left_speed = 0
+            speed.front_right_speed = 0
+            speed.back_right_speed = 0
+            speed.front_left_speed = 0
+
+        pub_two.publish(speed)
 
     elif angular_z != prev_angular_z:
         
@@ -198,55 +215,74 @@ def callback(data):
             turning_speed_away = -1 * angular_speed_towards
 
             send_speed_command(BACK_LEFT_MOTOR_ID, int(angular_speed_towards))
-            get_position(BACK_LEFT_MOTOR_ID)
-
             send_speed_command(FRONT_RIGHT_MOTOR_ID, int(turning_speed_away))
-            get_position(FRONT_RIGHT_MOTOR_ID)
-
             send_speed_command(BACK_RIGHT_MOTOR_ID, int(turning_speed_away))
-            get_position(BACK_RIGHT_MOTOR_ID)
-
             send_speed_command(FRONT_LEFT_MOTOR_ID, int(angular_speed_towards))
+            
+            get_position(BACK_LEFT_MOTOR_ID)
+            get_position(FRONT_RIGHT_MOTOR_ID)
+            get_position(BACK_RIGHT_MOTOR_ID)
             get_position(FRONT_LEFT_MOTOR_ID)
 
         else:
             send_stop_command(BACK_LEFT_MOTOR_ID)
-            get_position(BACK_LEFT_MOTOR_ID)
-
             send_stop_command(FRONT_RIGHT_MOTOR_ID)
-            get_position(FRONT_RIGHT_MOTOR_ID)
-
             send_stop_command(BACK_RIGHT_MOTOR_ID)
-            get_position(BACK_RIGHT_MOTOR_ID)
-
             send_stop_command(FRONT_LEFT_MOTOR_ID)
+            
+            get_position(BACK_LEFT_MOTOR_ID)
+            get_position(FRONT_RIGHT_MOTOR_ID)
+            get_position(BACK_RIGHT_MOTOR_ID)
             get_position(FRONT_LEFT_MOTOR_ID)
 
     else:
         get_position(BACK_LEFT_MOTOR_ID)
-
         get_position(FRONT_RIGHT_MOTOR_ID)
-
-        get_position(BACK_RIGHT_MOTOR_ID)
-        
+        get_position(BACK_RIGHT_MOTOR_ID)       
         get_position(FRONT_LEFT_MOTOR_ID)
 
     prev_linear_x = linear_x
     prev_angular_z = angular_z
 
+def gui_input_callback(data):
+    
+    if data.zero == 1.0:
+        send_stop_command(BACK_LEFT_MOTOR_ID)
+        send_stop_command(FRONT_RIGHT_MOTOR_ID)
+        send_stop_command(BACK_RIGHT_MOTOR_ID)
+        send_stop_command(FRONT_LEFT_MOTOR_ID)
+        
+        get_position(BACK_LEFT_MOTOR_ID)
+        get_position(FRONT_RIGHT_MOTOR_ID)
+        get_position(BACK_RIGHT_MOTOR_ID)
+        get_position(FRONT_LEFT_MOTOR_ID)
+
+
+        zero_position(BACK_LEFT_MOTOR_ID)
+        zero_position(FRONT_RIGHT_MOTOR_ID)
+        zero_position(BACK_RIGHT_MOTOR_ID)
+        zero_position(FRONT_LEFT_MOTOR_ID)
+        
+        get_position(BACK_LEFT_MOTOR_ID)
+        get_position(FRONT_RIGHT_MOTOR_ID)
+        get_position(BACK_RIGHT_MOTOR_ID)
+        get_position(FRONT_LEFT_MOTOR_ID)
+
+        reset = Buttons()
+        reset.zero = 0.0
+        pub.publish(reset)
+
+
 def main():
 
     rospy.init_node('myactuator_cntl_node')
 
-    rospy.Subscriber('cmd_vel', Twist, callback)
+    rospy.Subscriber('cmd_vel', Twist, cmd_vel_callback)
+
+    rospy.Subscriber('gui_input', Buttons, gui_input_callback)
 
     rospy.spin()
 
 if __name__ == "__main__":
-    
-    zero_position(BACK_LEFT_MOTOR_ID)
-    zero_position(FRONT_RIGHT_MOTOR_ID)
-    zero_position(BACK_RIGHT_MOTOR_ID)
-    zero_position(FRONT_LEFT_MOTOR_ID)
 
     main()
